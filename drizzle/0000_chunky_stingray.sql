@@ -1,4 +1,4 @@
-CREATE TABLE `records` (
+CREATE TABLE IF NOT EXISTS `records` (
 	`id` text PRIMARY KEY NOT NULL,
 	`resource_id` text NOT NULL,
 	`score` integer NOT NULL,
@@ -8,7 +8,7 @@ CREATE TABLE `records` (
 	`created_at` text NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE `resources` (
+CREATE TABLE IF NOT EXISTS `resources` (
 	`id` text PRIMARY KEY NOT NULL,
 	`year` integer NOT NULL,
 	`title` text NOT NULL,
