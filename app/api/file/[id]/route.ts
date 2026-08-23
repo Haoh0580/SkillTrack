@@ -1,0 +1,2 @@
+import { env } from "cloudflare:workers";
+export async function GET(_:Request,{params}:{params:Promise<{id:string}>}){const {id}=await params;const r=await env.DB.prepare("SELECT file FROM resources WHERE id=?").bind(id).first<{file:string}>();const key=r?.file?.replace("/api/file/","questions/");const obj=key&&await env.FILES.get(key);return obj?new Response(obj.body,{headers:{"content-type":obj.httpMetadata?.contentType||"application/octet-stream"}}):new Response("Not found",{status:404});}

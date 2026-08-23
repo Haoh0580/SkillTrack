@@ -1,0 +1,6 @@
+import { env } from "cloudflare:workers";
+import { questions } from "../../lib/questions";
+const db=()=>env.DB;
+async function init(){await db().prepare("CREATE TABLE IF NOT EXISTS resources (id TEXT PRIMARY KEY,year INTEGER,title TEXT,category TEXT,level TEXT,note TEXT,file TEXT,page INTEGER)").run();await db().prepare("CREATE TABLE IF NOT EXISTS records (id TEXT PRIMARY KEY,resource_id TEXT,score INTEGER,minutes INTEGER,status TEXT,notes TEXT,created_at TEXT)").run();const n=await db().prepare("SELECT COUNT(*) AS n FROM resources").first<{n:number}>();if(!n?.n)await db().batch(questions.map(x=>db().prepare("INSERT INTO resources VALUES (?,?,?,?,?,?,?,?)").bind(x.id,x.year,x.title,x.category,x.level,x.note,x.file,x.page)));}
+export async function GET(){await init();return Response.json({resources:(await db().prepare("SELECT * FROM resources ORDER BY year,id").all()).results,records:(await db().prepare("SELECT * FROM records ORDER BY created_at").all()).results});}
+export async function POST(r:Request){await init();const x=await r.json();await db().prepare("INSERT INTO records VALUES (?,?,?,?,?,?,?)").bind(crypto.randomUUID(),x.resourceId,x.score,x.minutes,x.status,x.notes||"",new Date().toISOString()).run();return Response.json({ok:true});}
