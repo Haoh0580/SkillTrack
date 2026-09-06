@@ -44,28 +44,40 @@ describe("C# 作答工作區", () => {
   });
 });
 
-describe("正式評測 verdict taxonomy 對成績寫入的影響", () => {
-  it("compilation_error 視為真實評測結果，會自動回填成績（0 分／未完成），如同 runtime_error", async () => {
+describe("Phase 4：server-authoritative finalization（Browser 不再自己決定成績）", () => {
+  it("送出評測時會附上 elapsedSeconds（純顯示用資訊），且不再由 Browser 自行呼叫 /api/data 記分", async () => {
     const user = userEvent.setup();
-    const fetchMock = vi.fn().mockImplementation((url: string) => {
-      if (url === "/api/submissions") return Promise.resolve({ json: async () => ({ verdict: "compilation_error", passed: 0, total: 5, stderr: "CS1002: ; expected" }) });
-      return Promise.resolve({ json: async () => ({ ok: true }) });
-    });
+    const fetchMock = vi.fn().mockResolvedValue({ json: async () => ({ verdict: "accepted", passed: 5, total: 5, score: 100, status: "完成", finalized: true }) });
     vi.stubGlobal("fetch", fetchMock);
     renderWorkspace();
 
     await user.click(screen.getByRole("button", { name: "送出評測" }));
 
     expect(await screen.findByText("送出完成，已自動更新分數結果與能力雷達")).toBeTruthy();
-    const dataCall = fetchMock.mock.calls.find((call) => call[0] === "/api/data");
-    expect(dataCall).toBeTruthy();
-    const dataBody = JSON.parse((dataCall![1] as RequestInit).body as string);
-    expect(dataBody).toMatchObject({ resourceId: "112-2", score: 0, status: "未完成" });
+    expect(await screen.findByText("正式分數：100（完成）")).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledTimes(1); // only /api/submissions — no follow-up /api/data call
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    expect(body).toMatchObject({ problemId: "112-2", language: "csharp" });
+    expect(typeof body.elapsedSeconds).toBe("number");
+  });
+
+  it("compilation_error 視為真實評測結果，顯示 server 回傳的分數／狀態，不再由 client 自行計算或回填 /api/data", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn().mockResolvedValue({ json: async () => ({ verdict: "compilation_error", passed: 0, total: 5, stderr: "CS1002: ; expected", score: 0, status: "未完成", finalized: true }) });
+    vi.stubGlobal("fetch", fetchMock);
+    renderWorkspace();
+
+    await user.click(screen.getByRole("button", { name: "送出評測" }));
+
+    expect(await screen.findByText("送出完成，已自動更新分數結果與能力雷達")).toBeTruthy();
+    expect(await screen.findByText("正式分數：0（未完成）")).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).not.toHaveBeenCalledWith("/api/data", expect.anything());
   });
 
   it("judge_unavailable 不回填成績、不顯示人工確認表單，只顯示可重試的訊息", async () => {
     const user = userEvent.setup();
-    const fetchMock = vi.fn().mockResolvedValue({ json: async () => ({ verdict: "judge_unavailable", passed: 0, total: 5, stderr: "判題服務暫時無法使用，請稍後重新送出評測（本次不計入成績）。" }) });
+    const fetchMock = vi.fn().mockResolvedValue({ json: async () => ({ verdict: "judge_unavailable", passed: 0, total: 5, stderr: "判題服務暫時無法使用，請稍後重新送出評測（本次不計入成績）。", finalized: false }) });
     vi.stubGlobal("fetch", fetchMock);
     renderWorkspace();
 
@@ -74,6 +86,20 @@ describe("正式評測 verdict taxonomy 對成績寫入的影響", () => {
     expect(await screen.findByText("判題服務暫時無法使用，請稍後重新送出評測（本次不計入成績）。")).toBeTruthy();
     expect(fetchMock.mock.calls.some((call) => call[0] === "/api/data")).toBe(false);
     expect(screen.queryByRole("button", { name: "確認並回填成績" })).toBeNull();
+    expect(screen.queryByText("正式分數", { exact: false })).toBeNull();
+  });
+
+  it("成績寫入失敗（finalized:false 但有 score）時，不宣稱成功，也不呼叫 /api/data 補救", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn().mockResolvedValue({ json: async () => ({ verdict: "accepted", passed: 5, total: 5, score: 100, status: "完成", finalized: false }) });
+    vi.stubGlobal("fetch", fetchMock);
+    renderWorkspace();
+
+    await user.click(screen.getByRole("button", { name: "送出評測" }));
+
+    expect(await screen.findByText("評測已完成，但寫入正式成績時發生問題，請稍後重新整理訓練總覽確認，或重新送出評測。")).toBeTruthy();
+    expect(screen.queryByText("送出完成，已自動更新分數結果與能力雷達")).toBeNull();
+    expect(fetchMock.mock.calls.some((call) => call[0] === "/api/data")).toBe(false);
   });
 });
 

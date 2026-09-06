@@ -43,3 +43,34 @@ export function applyJudgeResult(
     updatedAt,
   };
 }
+
+// A real, completed judgement against validated test cases — these are the only
+// verdicts that produce a formal training record. "judge_not_configured" (Manual
+// Review) and "judge_unavailable" (upstream judge failed) are deliberately excluded:
+// neither is a verdict on the student's code, so neither may score.
+const SCOREABLE_VERDICTS: SubmissionResult["verdict"][] = [
+  "accepted",
+  "wrong_answer",
+  "compilation_error",
+  "runtime_error",
+  "time_limit",
+];
+
+export function isScoreableVerdict(verdict: SubmissionResult["verdict"]): boolean {
+  return SCOREABLE_VERDICTS.includes(verdict);
+}
+
+export type TrainingOutcome = { score: number; status: string };
+
+/**
+ * The formal score/status rule for a judged submission. This is the same formula the
+ * workspace used to compute client-side before Phase 4 — moved here so the server,
+ * not the browser, is the one deciding whether a formal training record gets written
+ * and what it says. The algorithm itself is unchanged.
+ */
+export function deriveTrainingOutcome(result: Pick<SubmissionResult, "verdict" | "passed">): TrainingOutcome | null {
+  if (!isScoreableVerdict(result.verdict)) return null;
+  const score = result.verdict === "accepted" ? 100 : 0;
+  const status = result.verdict === "accepted" ? "完成" : result.passed > 0 ? "部分完成" : "未完成";
+  return { score, status };
+}

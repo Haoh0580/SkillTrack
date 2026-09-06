@@ -2,19 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import type { SubmissionResult, SupportedLanguage } from "@/features/practice/domain";
+import type { SubmissionResponse, SupportedLanguage } from "@/features/practice/domain";
 import type { ProblemDefinition } from "@/features/practice/problem-definitions";
 
 type Props = { id: string; title: string; category: string; note: string; definition?: ProblemDefinition };
 const starter: Record<SupportedLanguage, string> = { csharp: "using System;\n\npublic class Program\n{\n    public static void Main()\n    {\n        // 從這裡開始作答\n    }\n}\n" };
 
-// Real, completed verdicts against validated test cases — these score and feed the
-// ability radar. "judge_not_configured" (Manual Review) and "judge_unavailable"
-// (upstream judge failed) are deliberately excluded: neither is a verdict on the
-// student's code.
-const judgedVerdicts: SubmissionResult["verdict"][] = ["accepted", "wrong_answer", "compilation_error", "runtime_error", "time_limit"];
-
-// Ungraded "Run Code" result from /api/judge — separate from SubmissionResult,
+// Ungraded "Run Code" result from /api/judge — separate from SubmissionResponse,
 // which is the scored 送出評測 verdict compared against stored test cases.
 type RunResult = {
   status: { id?: number; description?: string } | null;
@@ -32,7 +26,7 @@ export function PracticeWorkspace({ id, title, category, note, definition }: Pro
   const [seconds, setSeconds] = useState(0);
   const [running, setRunning] = useState(false);
   const [notice, setNotice] = useState("尚未送出");
-  const [submissionResult, setSubmissionResult] = useState<SubmissionResult | null>(null);
+  const [submissionResult, setSubmissionResult] = useState<SubmissionResponse | null>(null);
   const [backfillStatus, setBackfillStatus] = useState("部分完成");
   const [backfillScore, setBackfillScore] = useState(60);
   const [needsManualBackfill, setNeedsManualBackfill] = useState(false);
@@ -92,19 +86,28 @@ export function PracticeWorkspace({ id, title, category, note, definition }: Pro
     setNeedsManualBackfill(false);
     setBackfillSaved(false);
     try {
-      const response = await fetch("/api/submissions", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ problemId: id, language, source }) });
-      const result = await response.json() as SubmissionResult & { error?: string };
+      // The server is the sole scoring authority: /api/submissions judges, computes
+      // score/status, and writes the training record itself. The workspace no
+      // longer decides "is this accepted" or POSTs a score to /api/data on its own —
+      // it only sends the code and elapsed time (elapsedSeconds is purely
+      // informational display data; the server clamps it and it never affects
+      // verdict or score), then renders whatever the server already finalized.
+      const response = await fetch("/api/submissions", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ problemId: id, language, source, elapsedSeconds: seconds }) });
+      const result = await response.json() as SubmissionResponse & { error?: string };
       if (!result.verdict) {
         setNotice(result.error ?? "送出失敗，請稍後再試。");
         return;
       }
       setSubmissionResult(result);
-      if (judgedVerdicts.includes(result.verdict)) {
-        const score = result.verdict === "accepted" ? 100 : 0;
-        const status = result.verdict === "accepted" ? "完成" : result.passed > 0 ? "部分完成" : "未完成";
-        await saveRecord(status, score, `送出評測自動回填（${result.passed}/${result.total} 測資，判定 ${result.verdict}）`);
+      if (result.finalized) {
         setNotice("送出完成，已自動更新分數結果與能力雷達");
         setBackfillSaved(true);
+      } else if (result.score !== undefined) {
+        // A real, scoreable verdict came back, but the server failed to persist the
+        // training record — never claim success here. The verdict itself is safely
+        // stored; resubmitting is safe (it can't double-score this attempt) but
+        // starts a fresh submission rather than recovering this exact one.
+        setNotice("評測已完成，但寫入正式成績時發生問題，請稍後重新整理訓練總覽確認，或重新送出評測。");
       } else if (result.verdict === "judge_unavailable") {
         // Upstream judge failed (timeout/5xx/malformed response) on a validated
         // problem — never the student's fault, so never score it or offer the
@@ -157,6 +160,7 @@ export function PracticeWorkspace({ id, title, category, note, definition }: Pro
           <div><b>評測結果</b><span>{notice}</span></div>
           {submissionResult ? <div className="judge-summary">
             <p>{submissionResult.verdict === "accepted" ? `已通過 ${submissionResult.passed} / ${submissionResult.total} 測資` : `結果：${submissionResult.verdict}（通過 ${submissionResult.passed} / ${submissionResult.total}）`}</p>
+            {submissionResult.score !== undefined && <p>正式分數：{submissionResult.score}（{submissionResult.status}）</p>}
             {submissionResult.elapsedMs !== undefined && <p>耗時 {submissionResult.elapsedMs} ms</p>}
             {submissionResult.stdout && <p>程式輸出：{submissionResult.stdout}</p>}
             {submissionResult.stderr && <p>訊息：{submissionResult.stderr}</p>}

@@ -19,6 +19,11 @@ export const records = sqliteTable("records", {
   status: text("status").notNull(),
   notes: text("notes").notNull(),
   createdAt: text("created_at").notNull(),
+  // Links a formal (server-finalized) record back to the submission that produced it.
+  // Null for Manual Review / legacy self-reported records. A partial unique index
+  // (managed at runtime in lib/records/store.ts, alongside this table's other
+  // runtime-managed DDL) enforces at most one formal record per submission.
+  submissionId: text("submission_id"),
 });
 
 export const submissions = sqliteTable(

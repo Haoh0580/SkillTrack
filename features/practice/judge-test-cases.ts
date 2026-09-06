@@ -79,3 +79,14 @@ export function getJudgeTestCases(problemId: string): JudgeTestCase[] {
 export function getJudgeMode(problemId: string): JudgeMode {
   return testSuitesByProblem[problemId]?.judgeMode ?? "manual";
 }
+
+/**
+ * The trust-boundary gate for the Manual Review self-report endpoint (/api/data
+ * POST). A problem with real, validated test cases must always be scored through
+ * /api/submissions' server-authoritative finalization — never through a client
+ * self-reporting an arbitrary score. Extracted as its own function so it's testable
+ * without importing anything that touches the Cloudflare Workers runtime.
+ */
+export function isManualBackfillAllowed(problemId: string): boolean {
+  return getJudgeMode(problemId) !== "validated";
+}
