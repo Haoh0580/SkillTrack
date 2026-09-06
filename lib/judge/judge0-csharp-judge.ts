@@ -7,6 +7,9 @@ type Judge0Config = {
   endpoint: string;
   csharpLanguageId: number;
   apiKey?: string;
+  /** Extra headers merged in after the apiKey-derived X-Auth-Token header, e.g. the
+   * X-RapidAPI-Key / X-RapidAPI-Host pair required by Judge0 CE hosted on RapidAPI. */
+  headers?: Record<string, string>;
   fetcher?: Fetcher;
 };
 
@@ -46,7 +49,7 @@ export function createJudge0CSharpJudge(config: Judge0Config): CSharpJudge {
         try {
           response = await fetcher(url, {
             method: "POST",
-            headers: { "content-type": "application/json", ...(config.apiKey ? { "X-Auth-Token": config.apiKey } : {}) },
+            headers: { "content-type": "application/json", ...(config.apiKey ? { "X-Auth-Token": config.apiKey } : {}), ...config.headers },
             body: JSON.stringify({
               source_code: request.source,
               language_id: config.csharpLanguageId,

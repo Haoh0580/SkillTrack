@@ -22,15 +22,28 @@ export async function POST(request: Request) {
   await savePendingSubmission(database, pending);
 
   const staticTests = getJudgeTestCases(body.problemId);
-  const tests = staticTests.length ? staticTests : await import("@/lib/problem-generation/problem-store").then((m) => m.getPublishedTests(body.problemId!));
-  const result: SubmissionResult = await getCSharpJudge().run({
-    problemId: body.problemId,
-    source: body.source,
-    tests,
-    timeLimitMs: 2000,
-    memoryLimitMb: 256,
-  });
+  // The published-draft lookup only ever has rows for AI-generated problems; for the
+  // official 112/113/114 problem IDs it's a guaranteed miss, so failures there (or in
+  // non-Workers environments) must not take down submission handling.
+  const tests = staticTests.length
+    ? staticTests
+    : await import("@/lib/problem-generation/problem-store").then((m) => m.getPublishedTests(body.problemId!)).catch(() => []);
+
+  // A judge adapter with zero test cases would vacuously report "accepted" (an empty
+  // loop over no tests never fails). Treat "no verified test data yet" as
+  // judge_not_configured so the workspace falls back to the manual confirm step
+  // instead of silently marking every submission correct.
+  const result: SubmissionResult = tests.length
+    ? await getCSharpJudge().run({
+        problemId: body.problemId,
+        source: body.source,
+        tests,
+        timeLimitMs: 2000,
+        memoryLimitMb: 256,
+      })
+    : { id: crypto.randomUUID(), verdict: "judge_not_configured", passed: 0, total: 0, stderr: "此題尚未提供可自動評測的測試資料，請在下方確認作答結果。" };
+
   const completed = applyJudgeResult(pending, { ...result, id: pending.id }, new Date().toISOString());
   await saveJudgeResult(database, completed);
-  return Response.json(completed, { status: 503 });
+  return Response.json(completed, { status: result.verdict === "judge_not_configured" ? 503 : 200 });
 }

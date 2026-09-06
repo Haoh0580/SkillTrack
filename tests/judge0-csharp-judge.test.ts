@@ -46,4 +46,22 @@ describe("Judge0 C# 判題 Adapter", () => {
     expect(result).toMatchObject({ verdict: "time_limit", passed: 0, total: 2 });
     expect(result.stderr).not.toContain("server-only-secret");
   });
+
+  it("可改用 RapidAPI 代管的 Judge0 CE，帶上 X-RapidAPI-Key / X-RapidAPI-Host 而非 X-Auth-Token", async () => {
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ status: { id: 3 }, stdout: "2\n", time: "0.05" }), { status: 201 }));
+    const judge = createJudge0CSharpJudge({
+      endpoint: "https://judge0-ce.p.rapidapi.com",
+      csharpLanguageId: 51,
+      headers: { "X-RapidAPI-Key": "rapid-secret", "X-RapidAPI-Host": "judge0-ce.p.rapidapi.com" },
+      fetcher,
+    });
+
+    const result = await judge.run({ ...request, tests: [request.tests[0]] });
+
+    const headers = fetcher.mock.calls[0][1].headers as Record<string, string>;
+    expect(headers["X-RapidAPI-Key"]).toBe("rapid-secret");
+    expect(headers["X-RapidAPI-Host"]).toBe("judge0-ce.p.rapidapi.com");
+    expect(headers["X-Auth-Token"]).toBeUndefined();
+    expect(result).toMatchObject({ verdict: "accepted", passed: 1, total: 1 });
+  });
 });

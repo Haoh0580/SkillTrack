@@ -17,8 +17,8 @@ export function PracticeWorkspace({ id, title, category, note, definition }: Pro
   const [running, setRunning] = useState(false);
   const [notice, setNotice] = useState("尚未送出");
   const [submissionResult, setSubmissionResult] = useState<SubmissionResult | null>(null);
-  const [backfillStatus, setBackfillStatus] = useState("完成");
-  const [backfillScore, setBackfillScore] = useState(100);
+  const [backfillStatus, setBackfillStatus] = useState("部分完成");
+  const [backfillScore, setBackfillScore] = useState(60);
   const [needsManualBackfill, setNeedsManualBackfill] = useState(false);
   const [backfillSaved, setBackfillSaved] = useState(false);
   const [backfillSaving, setBackfillSaving] = useState(false);
@@ -91,7 +91,7 @@ export function PracticeWorkspace({ id, title, category, note, definition }: Pro
           </div> : <p>送出後將在這裡顯示通過數、耗時與執行訊息。</p>}
           {backfillSaved && <p className="backfill-saved">✓ 已回填至練習紀錄，重新整理訓練總覽即可看到最新的分數與能力雷達。</p>}
           {needsManualBackfill && !backfillSaved && <div className="backfill-inline">
-            <p>自動判題服務尚未接入，請確認這次作答的結果，送出後會直接回填分數結果與能力雷達，不需要再到訓練總覽手動填寫。</p>
+            <p>此題目前還沒有可自動驗證的判題資料，請誠實評估這次作答的完成度再送出；送出後會直接回填分數結果與能力雷達，不需要再到訓練總覽手動填寫。</p>
             <label>結果狀態 <select value={backfillStatus} onChange={(event) => setBackfillStatus(event.target.value)}><option>完成</option><option>部分完成</option><option>未完成</option></select></label>
             <label>分數 <input type="number" min={0} max={100} value={backfillScore} onChange={(event) => setBackfillScore(Number(event.target.value))}/></label>
             <label>耗時（分） <b>{elapsedMinutes()}</b></label>

@@ -35,4 +35,18 @@ describe("送出評測 API", () => {
     expect(saveJudgeResult).toHaveBeenCalledOnce();
     expect(runJudge).toHaveBeenCalledWith(expect.objectContaining({ problemId: "112-2", tests: expect.arrayContaining([expect.objectContaining({ input: "idea\ndeal" })]) }));
   });
+
+  it("真正判定通過時回傳 200，而不是固定的 503", async () => {
+    runJudge.mockResolvedValue({ id: "remote-id", verdict: "accepted", passed: 1, total: 1 });
+    const response = await POST(request({ problemId: "112-2", language: "csharp", source: "public class Program {}" }));
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ verdict: "accepted", passed: 1, total: 1 });
+  });
+
+  it("沒有已驗證測試資料的題目不會呼叫判題器，避免空迴圈被誤判為 accepted", async () => {
+    const response = await POST(request({ problemId: "112-1", language: "csharp", source: "public class Program {}" }));
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({ verdict: "judge_not_configured", passed: 0, total: 0 });
+    expect(runJudge).not.toHaveBeenCalled();
+  });
 });
