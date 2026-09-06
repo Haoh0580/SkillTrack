@@ -11,8 +11,9 @@ export async function POST(request: Request) {
   const apiKey = request.headers.get("x-openai-api-key")?.trim();
   if (!apiKey) return Response.json({ error: "AI 出題尚未啟用：請先在「設定 API Key」輸入你的 OpenAI API Key。" }, { status: 401 });
   const ai = env as unknown as AiEnvironment;
+  const model = body.model?.trim() || ai.AI_MODEL || "gpt-4o-mini";
   try {
-    const draft = await generateProblemDraft({ apiKey, model: ai.AI_MODEL ?? "gpt-5.4-mini", difficulty: body.difficulty });
+    const draft = await generateProblemDraft({ apiKey, model, difficulty: body.difficulty });
     return Response.json({ draft });
   } catch (error) {
     const message = error instanceof Error ? error.message : "AI 出題服務暫時無法使用";

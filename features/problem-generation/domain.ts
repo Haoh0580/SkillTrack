@@ -23,6 +23,7 @@ export type GeneratedProblemDraft = {
 
 export type ProblemDraftRequest = {
   difficulty: GenerationDifficulty;
+  model?: string;
 };
 
 export function isGenerationDifficulty(value: unknown): value is GenerationDifficulty {
