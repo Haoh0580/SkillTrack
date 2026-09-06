@@ -23,11 +23,12 @@
 1. 建立獨立的 Judge0 CE 主機，勿與平台資料庫或檔案服務共用執行環境。
 2. 以防火牆或反向代理限制僅接受平台的 HTTPS 請求，並開啟 Judge0 認證。
 3. 在主機上確認 C# 可用語言與 language ID，並以小型測資驗證編譯、逾時和記憶體限制。
-4. 將判題端點存為 `JUDGE_ENDPOINT`；認證值存為 `JUDGE_API_KEY` 的部署祕密，不寫入原始碼、題目資料、瀏覽器或 Git。
-5. 設定後才將平台 Adapter 改為 Judge0 專用協定，並以公開與私有測資做端對端驗證。
+4. 將 `JUDGE_PROVIDER` 設為 `judge0`、判題端點存為 `JUDGE_ENDPOINT`、該實例的 C# language ID 存為 `JUDGE0_CSHARP_LANGUAGE_ID`；認證值存為 `JUDGE_API_KEY` 的部署祕密。
+5. 以公開與私有測資做端對端驗證後，才將這組設定用於正式平台。
 
 ## 金鑰處理規則
 
 - `JUDGE_ENDPOINT` 可以是非機密的部署設定；`JUDGE_API_KEY` 必須是部署平台的 Secret。
+- `JUDGE_PROVIDER=judge0` 與 `JUDGE0_CSHARP_LANGUAGE_ID` 是非機密設定；C# language ID 必須從該 Judge0 實例的 `/languages` 查得，不能假設所有實例相同。
 - 本機若需測試，僅使用未提交的 `.dev.vars`；`.dev.vars*` 已列入 Git 忽略規則。
 - Worker Secret 可以透過 `cloudflare:workers` 的 `env` 讀取，且不會由 API 回傳給瀏覽器。Cloudflare 也明確建議敏感值使用 Secret、不要寫入 Wrangler 的明文設定或提交到 Git。[Cloudflare Secrets 文件](https://developers.cloudflare.com/workers/configuration/secrets/)
