@@ -8,7 +8,11 @@ import type { ProblemDefinition } from "@/features/practice/problem-definitions"
 type Props = { id: string; title: string; category: string; note: string; definition?: ProblemDefinition };
 const starter: Record<SupportedLanguage, string> = { csharp: "using System;\n\npublic class Program\n{\n    public static void Main()\n    {\n        // 從這裡開始作答\n    }\n}\n" };
 
-const judgedVerdicts: SubmissionResult["verdict"][] = ["accepted", "wrong_answer", "runtime_error", "time_limit"];
+// Real, completed verdicts against validated test cases — these score and feed the
+// ability radar. "judge_not_configured" (Manual Review) and "judge_unavailable"
+// (upstream judge failed) are deliberately excluded: neither is a verdict on the
+// student's code.
+const judgedVerdicts: SubmissionResult["verdict"][] = ["accepted", "wrong_answer", "compilation_error", "runtime_error", "time_limit"];
 
 // Ungraded "Run Code" result from /api/judge — separate from SubmissionResult,
 // which is the scored 送出評測 verdict compared against stored test cases.
@@ -101,6 +105,11 @@ export function PracticeWorkspace({ id, title, category, note, definition }: Pro
         await saveRecord(status, score, `送出評測自動回填（${result.passed}/${result.total} 測資，判定 ${result.verdict}）`);
         setNotice("送出完成，已自動更新分數結果與能力雷達");
         setBackfillSaved(true);
+      } else if (result.verdict === "judge_unavailable") {
+        // Upstream judge failed (timeout/5xx/malformed response) on a validated
+        // problem — never the student's fault, so never score it or offer the
+        // manual-confirm form (that's reserved for problems with no test data yet).
+        setNotice(result.stderr ?? "判題服務暫時無法使用，請稍後重新送出評測（本次不計入成績）。");
       } else {
         setNotice("判題服務尚未接入，已驗證送出 API 契約");
         setNeedsManualBackfill(true);

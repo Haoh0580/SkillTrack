@@ -45,5 +45,8 @@ export async function POST(request: Request) {
 
   const completed = applyJudgeResult(pending, { ...result, id: pending.id }, new Date().toISOString());
   await saveJudgeResult(database, completed);
-  return Response.json(completed, { status: result.verdict === "judge_not_configured" ? 503 : 200 });
+  // judge_not_configured (Manual Review) and judge_unavailable (upstream judge failed)
+  // are both "no real verdict was produced" — 503 signals that at the HTTP level too.
+  const noVerdictProduced = result.verdict === "judge_not_configured" || result.verdict === "judge_unavailable";
+  return Response.json(completed, { status: noVerdictProduced ? 503 : 200 });
 }

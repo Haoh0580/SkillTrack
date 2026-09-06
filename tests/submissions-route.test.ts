@@ -49,4 +49,29 @@ describe("送出評測 API", () => {
     await expect(response.json()).resolves.toMatchObject({ verdict: "judge_not_configured", passed: 0, total: 0 });
     expect(runJudge).not.toHaveBeenCalled();
   });
+
+  it("compilation_error 視為真實評測結果，回傳 200（會計入成績，而非誤判為服務不可用）", async () => {
+    runJudge.mockResolvedValue({ id: "remote-id", verdict: "compilation_error", passed: 0, total: 5, stderr: "CS1002: ; expected" });
+    const response = await POST(request({ problemId: "112-2", language: "csharp", source: "broken" }));
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ verdict: "compilation_error" });
+  });
+
+  it("judge_unavailable 與 judge_not_configured 一樣回傳 503（都不是對學生程式的真實判定）", async () => {
+    runJudge.mockResolvedValue({ id: "remote-id", verdict: "judge_unavailable", passed: 0, total: 5, stderr: "判題服務暫時無法使用" });
+    const response = await POST(request({ problemId: "112-2", language: "csharp", source: "public class Program {}" }));
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({ verdict: "judge_unavailable" });
+  });
+
+  it("Phase 3 新增的 validated 題目（113-1、114-3）現在會把測資交給判題器", async () => {
+    runJudge.mockResolvedValue({ id: "remote-id", verdict: "accepted", passed: 5, total: 5 });
+
+    await POST(request({ problemId: "113-1", language: "csharp", source: "..." }));
+    expect(runJudge).toHaveBeenCalledWith(expect.objectContaining({ problemId: "113-1", tests: expect.arrayContaining([expect.objectContaining({ input: "1,2,3,4", expectedOutput: "43/30" })]) }));
+
+    runJudge.mockClear();
+    await POST(request({ problemId: "114-3", language: "csharp", source: "..." }));
+    expect(runJudge).toHaveBeenCalledWith(expect.objectContaining({ problemId: "114-3", tests: expect.arrayContaining([expect.objectContaining({ expectedOutput: "4" })]) }));
+  });
 });

@@ -44,6 +44,39 @@ describe("C# 作答工作區", () => {
   });
 });
 
+describe("正式評測 verdict taxonomy 對成績寫入的影響", () => {
+  it("compilation_error 視為真實評測結果，會自動回填成績（0 分／未完成），如同 runtime_error", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url === "/api/submissions") return Promise.resolve({ json: async () => ({ verdict: "compilation_error", passed: 0, total: 5, stderr: "CS1002: ; expected" }) });
+      return Promise.resolve({ json: async () => ({ ok: true }) });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    renderWorkspace();
+
+    await user.click(screen.getByRole("button", { name: "送出評測" }));
+
+    expect(await screen.findByText("送出完成，已自動更新分數結果與能力雷達")).toBeTruthy();
+    const dataCall = fetchMock.mock.calls.find((call) => call[0] === "/api/data");
+    expect(dataCall).toBeTruthy();
+    const dataBody = JSON.parse((dataCall![1] as RequestInit).body as string);
+    expect(dataBody).toMatchObject({ resourceId: "112-2", score: 0, status: "未完成" });
+  });
+
+  it("judge_unavailable 不回填成績、不顯示人工確認表單，只顯示可重試的訊息", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn().mockResolvedValue({ json: async () => ({ verdict: "judge_unavailable", passed: 0, total: 5, stderr: "判題服務暫時無法使用，請稍後重新送出評測（本次不計入成績）。" }) });
+    vi.stubGlobal("fetch", fetchMock);
+    renderWorkspace();
+
+    await user.click(screen.getByRole("button", { name: "送出評測" }));
+
+    expect(await screen.findByText("判題服務暫時無法使用，請稍後重新送出評測（本次不計入成績）。")).toBeTruthy();
+    expect(fetchMock.mock.calls.some((call) => call[0] === "/api/data")).toBe(false);
+    expect(screen.queryByRole("button", { name: "確認並回填成績" })).toBeNull();
+  });
+});
+
 describe("執行程式（Run Code）與送出評測（Submit）互不干擾", () => {
   it("執行程式會把測試輸入原樣送到 /api/judge，且不會呼叫 /api/submissions 或 /api/data", async () => {
     const user = userEvent.setup();

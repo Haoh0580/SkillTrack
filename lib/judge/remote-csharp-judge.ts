@@ -12,17 +12,22 @@ type RemoteJudgeConfig = {
 const supportedVerdicts = new Set<SubmissionResult["verdict"]>([
   "accepted",
   "wrong_answer",
+  "compilation_error",
   "runtime_error",
   "time_limit",
+  "judge_unavailable",
 ]);
 
+// The upstream service failed, or answered with something we don't trust (missing/
+// unrecognized verdict, non-2xx, network error). This is never a verdict on the
+// student's code — never "runtime_error" — so it must not score or update the radar.
 function unavailableResult(request: CSharpJudgeRequest): SubmissionResult {
   return {
     id: crypto.randomUUID(),
-    verdict: "runtime_error",
+    verdict: "judge_unavailable",
     passed: 0,
     total: request.tests.length,
-    stderr: "遠端判題服務暫時無法使用，請稍後再試。",
+    stderr: "遠端判題服務暫時無法使用，請稍後再試，本次不計入成績。",
   };
 }
 
