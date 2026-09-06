@@ -48,7 +48,11 @@ export async function generateProblemDraft({ apiKey, model, difficulty }: { apiK
       text: { format: { type: "json_schema", name: "training_problem_draft", strict: true, schema } },
     }),
   });
-  if (!response.ok) throw new Error(`AI 出題服務暫時無法使用（${response.status}）`);
+  if (!response.ok) {
+    const detail = await response.json().catch(() => undefined) as { error?: { message?: string; code?: string } } | undefined;
+    const reason = detail?.error?.message ?? detail?.error?.code;
+    throw new Error(reason ? `AI 出題服務暫時無法使用（${response.status}：${reason}）` : `AI 出題服務暫時無法使用（${response.status}）`);
+  }
   const text = getOutputText(await response.json() as OpenAiResponse);
   if (!text) throw new Error("AI 未回傳可讀取的題目內容");
   const draft = validateGeneratedDraft(JSON.parse(text), difficulty);
