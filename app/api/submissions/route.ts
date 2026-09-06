@@ -1,8 +1,9 @@
 import type { SubmissionRequest, SubmissionResult } from "@/features/practice/domain";
 import { applyJudgeResult, createPendingSubmission } from "@/features/practice/submission-record";
-import { unavailableCSharpJudge } from "@/lib/judge/unavailable-csharp-judge";
+import { getCSharpJudge } from "@/lib/judge/csharp-judge";
 import { getSubmissionDatabase } from "@/lib/runtime/database";
 import { saveJudgeResult, savePendingSubmission } from "@/lib/submissions/store";
+import { getJudgeTestCases } from "@/features/practice/judge-test-cases";
 
 export async function POST(request: Request) {
   const body = await request.json() as Partial<SubmissionRequest>;
@@ -20,7 +21,13 @@ export async function POST(request: Request) {
   });
   await savePendingSubmission(database, pending);
 
-  const result: SubmissionResult = await unavailableCSharpJudge.run({ problemId: body.problemId, source: body.source, tests: [], timeLimitMs: 2000, memoryLimitMb: 256 });
+  const result: SubmissionResult = await getCSharpJudge().run({
+    problemId: body.problemId,
+    source: body.source,
+    tests: getJudgeTestCases(body.problemId),
+    timeLimitMs: 2000,
+    memoryLimitMb: 256,
+  });
   const completed = applyJudgeResult(pending, { ...result, id: pending.id }, new Date().toISOString());
   await saveJudgeResult(database, completed);
   return Response.json(completed, { status: 503 });

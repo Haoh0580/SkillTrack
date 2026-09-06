@@ -4,9 +4,11 @@ const { savePendingSubmission, saveJudgeResult } = vi.hoisted(() => ({
   savePendingSubmission: vi.fn(),
   saveJudgeResult: vi.fn(),
 }));
+const { runJudge } = vi.hoisted(() => ({ runJudge: vi.fn() }));
 
 vi.mock("@/lib/runtime/database", () => ({ getSubmissionDatabase: vi.fn(() => ({})) }));
 vi.mock("@/lib/submissions/store", () => ({ savePendingSubmission, saveJudgeResult }));
+vi.mock("@/lib/judge/csharp-judge", () => ({ getCSharpJudge: vi.fn(() => ({ run: runJudge })) }));
 
 import { POST } from "@/app/api/submissions/route";
 
@@ -16,6 +18,7 @@ describe("送出評測 API", () => {
   beforeEach(() => {
     savePendingSubmission.mockReset().mockResolvedValue(undefined);
     saveJudgeResult.mockReset().mockResolvedValue(undefined);
+    runJudge.mockReset().mockResolvedValue({ id: "remote-id", verdict: "judge_not_configured", passed: 0, total: 0 });
   });
   it("拒絕缺少題目、程式碼或 C# 語言的送出", async () => {
     const missingSource = await POST(request({ problemId: "112-2", language: "csharp" }));
@@ -30,5 +33,6 @@ describe("送出評測 API", () => {
     await expect(response.json()).resolves.toMatchObject({ verdict: "judge_not_configured", passed: 0, total: 0 });
     expect(savePendingSubmission).toHaveBeenCalledOnce();
     expect(saveJudgeResult).toHaveBeenCalledOnce();
+    expect(runJudge).toHaveBeenCalledWith(expect.objectContaining({ problemId: "112-2", tests: expect.arrayContaining([expect.objectContaining({ input: "idea\ndeal" })]) }));
   });
 });

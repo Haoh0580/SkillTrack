@@ -55,6 +55,13 @@ type SubmissionResult = {
 - 目前 Adapter 明確回傳 `judge_not_configured`，不執行學生程式碼；接入外部沙盒前，不需要 API Key。
 - 真正接入外部 C# 判題服務時，再評估該服務的帳號、費用與金鑰，並以伺服器端祕密設定保存，絕不傳到瀏覽器。
 
+## 判題服務接入規格
+
+- 112-2 已整理兩組公開測資與三組私有邊界測資；私有測資只會隨伺服器對判題服務的請求送出。
+- 平台以 `JUDGE_ENDPOINT` 啟用遠端判題；可選的 `JUDGE_API_KEY` 只讀取伺服器環境變數，並以 Bearer 標頭送往判題服務。
+- 遠端服務需接收 `{ language, source, tests, timeLimitMs, memoryLimitMb }`，並回傳 `{ verdict, passed, total, elapsedMs?, stdout?, stderr? }`。
+- 遠端非成功回應、網路錯誤或格式錯誤一律轉成泛用錯誤訊息，不會將上游內容或金鑰回傳給作答者。
+
 ## 目錄責任
 
 ```text
