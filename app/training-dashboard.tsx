@@ -4,6 +4,7 @@ import Link from "next/link";
 import "./globals.css";
 import { getStoredOpenAiKey, setStoredOpenAiKey, getStoredOpenAiModel, setStoredOpenAiModel } from "@/lib/settings/openai-key";
 
+type CurrentUser={id:string;displayName:string};
 type Question={id:string;year:number;title:string;category:string;level:string;note:string};
 type Attempt={resource_id:string;score:number;status:string;minutes:number;created_at:string};
 type Draft={id:string;difficulty:string;category:string;title:string;summary:string;statement:string;inputSpec:string;outputSpec:string;constraints:string[];examples:{input:string;output:string;explanation:string}[];tests:{input:string;expectedOutput:string;visibility:string}[]};
@@ -51,10 +52,20 @@ export default function TrainingDashboard(){
  const [levelFilter,setLevelFilter]=useState("all");
  const [onlyIncomplete,setOnlyIncomplete]=useState(false);
  const [categoryFocus,setCategoryFocus]=useState<string|null>(null);
+ const [currentUser,setCurrentUser]=useState<CurrentUser|null>(null);
+ const [renamingUser,setRenamingUser]=useState(false);
 
  const load=()=>fetch("/api/data").then(x=>x.json()).then(x=>{setQuestions(x.resources);setRecords(x.records)});
  const loadDrafts=()=>fetch("/api/problem-drafts").then(x=>x.json()).then(x=>setDrafts(x.drafts));
- useEffect(()=>{load();loadDrafts()},[]);
+ const loadUser=()=>fetch("/api/user").then(x=>x.json()).then(x=>setCurrentUser(x as CurrentUser));
+ useEffect(()=>{load();loadDrafts();loadUser()},[]);
+
+ // Identity here is a per-browser cookie, not password-verified login — see
+ // lib/auth/current-user.ts. Renaming only changes the display label; logging out
+ // starts a brand-new, separate identity on this browser (useful on a shared lab
+ // computer) without touching the previous student's stored data.
+ async function renameUser(e:FormEvent<HTMLFormElement>){e.preventDefault();const f=new FormData(e.currentTarget);const displayName=String(f.get("displayName")||"").trim();if(!displayName)return;const user=await fetch("/api/user",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({displayName})}).then(x=>x.json()) as CurrentUser;setCurrentUser(user);setRenamingUser(false)}
+ async function logoutUser(){if(!window.confirm("確定登出嗎？這台瀏覽器接下來會被視為新的使用者，你目前的練習紀錄不會被刪除，但暫時看不到。"))return;await fetch("/api/user",{method:"DELETE"});await Promise.all([load(),loadUser()])}
 
  function saveApiKey(e:FormEvent<HTMLFormElement>){e.preventDefault();const f=new FormData(e.currentTarget);const key=String(f.get("apiKey")||"");setStoredOpenAiKey(key);setStoredOpenAiModel(String(f.get("model")||""));setHasApiKey(!!key.trim());setSettingsOpen(false)}
  function clearApiKey(){setStoredOpenAiKey("");setHasApiKey(false)}
@@ -88,7 +99,7 @@ export default function TrainingDashboard(){
  async function removeQuestion(id:string,title:string){if(!window.confirm(`確定刪除「${title}」？題檔與此題練習紀錄都會一併刪除。`))return;await fetch(`/api/question/${id}`,{method:"DELETE"});load()}
 
  return <main>
-  <nav className="appnav"><Link className="brand" href="/"><span>⊹</span> CODE CAMP<span className="tagline">工科賽・電腦軟體設計</span></Link><div className="header-actions"><button className="ghost-dark" onClick={()=>setSettingsOpen(true)}>⚙ 設定 API Key{hasApiKey?"（已設定）":""}</button><button onClick={()=>{setGenerationMessage("");setGenerating(true)}}>✦ AI 出題</button></div></nav>
+  <nav className="appnav"><Link className="brand" href="/"><span>⊹</span> CODE CAMP<span className="tagline">工科賽・電腦軟體設計</span></Link><div className="header-actions">{currentUser&&<span className="user-badge" title="這台瀏覽器目前的身份，可重新命名或登出切換">👤 {currentUser.displayName}<button type="button" className="ghost-line" onClick={()=>setRenamingUser(true)}>編輯</button><button type="button" className="ghost-line" onClick={logoutUser}>登出</button></span>}<button className="ghost-dark" onClick={()=>setSettingsOpen(true)}>⚙ 設定 API Key{hasApiKey?"（已設定）":""}</button><button onClick={()=>{setGenerationMessage("");setGenerating(true)}}>✦ AI 出題</button></div></nav>
 
   <section className="hero">
    <div className="hero-top"><div><p className="kicker">訓練總覽</p><h1>本週訓練狀態</h1><p className="lead">{recommendation}</p></div></div>
@@ -128,6 +139,8 @@ export default function TrainingDashboard(){
   <section className="panel history-panel"><div className="maphead"><div><p className="kicker">練習紀錄</p><h2>回填的歷史成績</h2></div>{records.length>0&&<button className="delete" onClick={reset}>重設練習紀錄</button>}</div><p className="generation-copy">共 {records.length} 筆紀錄，完成 {records.filter(r=>r.status==="完成").length} 次。</p></section>
 
   {active&&<div className="modal" onClick={()=>setActive(null)}><form onSubmit={save} onClick={e=>e.stopPropagation()}><button type="button" onClick={()=>setActive(null)} aria-label="取消並關閉">×</button><p className="kicker">完成後回填</p><h2>{active.title}</h2><label>結果<select name="status"><option>完成</option><option>部分完成</option><option>未完成</option></select></label><label>分數<input name="score" type="number" min="0" max="100" required/></label><label>耗時（分）<input name="minutes" type="number" min="1" required/></label><label>筆記<textarea name="notes"/></label><button>儲存</button></form></div>}
+
+  {renamingUser&&currentUser&&<div className="modal" onClick={()=>setRenamingUser(false)}><form onSubmit={renameUser} onClick={e=>e.stopPropagation()}><button type="button" onClick={()=>setRenamingUser(false)} aria-label="取消並關閉">×</button><p className="kicker">目前身份</p><h2>設定顯示名稱</h2><p className="generation-copy">這個名稱只用來在這台裝置上辨識你自己，不是帳號密碼；練習紀錄與能力雷達都是依這台瀏覽器的身份分開儲存的。</p><label>顯示名稱<input name="displayName" defaultValue={currentUser.displayName} maxLength={40} required/></label><button>儲存</button></form></div>}
 
   {settingsOpen&&<div className="modal" onClick={()=>setSettingsOpen(false)}><form onSubmit={saveApiKey} onClick={e=>e.stopPropagation()}><button type="button" onClick={()=>setSettingsOpen(false)} aria-label="取消並關閉">×</button><p className="kicker">BYOK</p><h2>設定你的 OpenAI API Key</h2><p className="generation-copy">AI 出題功能改由你自己的 OpenAI API Key 呼叫，Key 只會存在你瀏覽器的 localStorage，不會送到我們的伺服器保存，每次出題時才會隨請求一起帶上。</p><label>OpenAI API Key<input name="apiKey" type="password" autoComplete="off" defaultValue={getStoredOpenAiKey()} placeholder="sk-..."/></label><label>模型代號（選填）<input name="model" type="text" autoComplete="off" defaultValue={getStoredOpenAiModel()} placeholder="留空使用預設 gpt-4o-mini"/></label><p className="generation-note">若出現「does not have access to model」錯誤，代表你的 OpenAI 專案沒有該模型權限，請到 platform.openai.com 確認帳號可用的模型名稱，填在這裡覆蓋預設值。</p>{hasApiKey&&<button type="button" className="delete" onClick={clearApiKey}>清除已儲存的 Key</button>}<button>儲存</button></form></div>}
 

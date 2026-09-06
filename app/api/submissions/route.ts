@@ -5,6 +5,7 @@ import { getSubmissionDatabase } from "@/lib/runtime/database";
 import { saveJudgeResult, savePendingSubmission } from "@/lib/submissions/store";
 import { insertFinalizedRecord } from "@/lib/records/store";
 import { getJudgeTestCases } from "@/features/practice/judge-test-cases";
+import { getOrCreateCurrentUser, withSetCookie } from "@/lib/auth/current-user";
 
 // Purely a display value (feeds the "本週練習時數" stat) — clamped so a bogus client
 // value can't blow up that stat, but it never influences verdict, score, or the radar.
@@ -16,6 +17,11 @@ export async function POST(request: Request) {
     return Response.json({ error: "題目、語言與程式碼不可空白" }, { status: 400 });
   }
   const database = getSubmissionDatabase();
+  // Ownership is resolved from the session cookie, never from the request body — a
+  // client cannot claim "I am someone else" no matter what it sends. If this is a
+  // new browser, a user is created and the caller must attach setCookieHeader to the
+  // final response so this identity persists for future requests.
+  const { user, setCookieHeader } = await getOrCreateCurrentUser(request, database);
   const submittedAt = new Date().toISOString();
   const pending = createPendingSubmission({
     id: crypto.randomUUID(),
@@ -23,6 +29,7 @@ export async function POST(request: Request) {
     language: body.language,
     source: body.source,
     now: submittedAt,
+    userId: user.id,
   });
   await savePendingSubmission(database, pending);
 
@@ -77,6 +84,7 @@ export async function POST(request: Request) {
         status: outcome.status,
         notes: `送出評測自動回填（${completed.passed}/${completed.total} 測資，判定 ${completed.verdict}）`,
         submissionId: completed.id,
+        userId: user.id,
       });
       finalized = true;
     } catch (error) {
@@ -111,5 +119,5 @@ export async function POST(request: Request) {
   // a real, fully finalized verdict — 200.
   const noVerdictProduced = completed.verdict === "judge_not_configured" || completed.verdict === "judge_unavailable";
   const status = noVerdictProduced ? 503 : outcome && !finalized ? 502 : 200;
-  return Response.json(response, { status });
+  return withSetCookie(Response.json(response, { status }), setCookieHeader);
 }

@@ -6,15 +6,22 @@ const { savePendingSubmission, saveJudgeResult } = vi.hoisted(() => ({
 }));
 const { runJudge } = vi.hoisted(() => ({ runJudge: vi.fn() }));
 const { insertFinalizedRecord } = vi.hoisted(() => ({ insertFinalizedRecord: vi.fn() }));
+const { getOrCreateCurrentUser } = vi.hoisted(() => ({ getOrCreateCurrentUser: vi.fn() }));
 
 vi.mock("@/lib/runtime/database", () => ({ getSubmissionDatabase: vi.fn(() => ({})) }));
 vi.mock("@/lib/submissions/store", () => ({ savePendingSubmission, saveJudgeResult }));
 vi.mock("@/lib/judge/csharp-judge", () => ({ getCSharpJudge: vi.fn(() => ({ run: runJudge })) }));
 vi.mock("@/lib/records/store", () => ({ insertFinalizedRecord }));
+vi.mock("@/lib/auth/current-user", () => ({
+  getOrCreateCurrentUser,
+  // Faithful passthrough (not a stub) so tests can verify real cookie-attachment behavior.
+  withSetCookie: (response: Response, header: string | null) => { if (header) response.headers.append("Set-Cookie", header); return response; },
+}));
 
 import { POST } from "@/app/api/submissions/route";
 
 const request = (body: unknown) => new Request("http://test/api/submissions", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+const CURRENT_USER = { id: "user-1", displayName: "Test Student", createdAt: "2026-01-01T00:00:00.000Z" };
 
 describe("送出評測 API", () => {
   beforeEach(() => {
@@ -22,6 +29,7 @@ describe("送出評測 API", () => {
     saveJudgeResult.mockReset().mockResolvedValue(undefined);
     runJudge.mockReset().mockResolvedValue({ id: "remote-id", verdict: "judge_not_configured", passed: 0, total: 0 });
     insertFinalizedRecord.mockReset().mockResolvedValue({ applied: true });
+    getOrCreateCurrentUser.mockReset().mockResolvedValue({ user: CURRENT_USER, setCookieHeader: null });
   });
 
   it("拒絕缺少題目、程式碼或 C# 語言的送出", async () => {
@@ -174,6 +182,40 @@ describe("送出評測 API", () => {
       expect(text).not.toContain("deal");
       expect(text).not.toContain("expectedOutput");
       expect(text).not.toContain("bait");
+    });
+  });
+
+  describe("Phase 5：User Identity — ownership 一律來自 session，不接受 client 宣稱", () => {
+    it("finalize 時的 userId 一律來自 session 解析出的 currentUser，而不是 request body", async () => {
+      runJudge.mockResolvedValue({ id: "remote-id", verdict: "accepted", passed: 1, total: 1 });
+      // A forged user_id in the body — the route never even reads this field.
+      await POST(request({ problemId: "112-2", language: "csharp", source: "...", user_id: "someone-else", userId: "someone-else" }));
+      expect(insertFinalizedRecord).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ userId: "user-1" }));
+    });
+
+    it("兩位不同使用者各自送出時，各自的 submission／record 都掛在自己的 userId 下", async () => {
+      runJudge.mockResolvedValue({ id: "remote-id", verdict: "accepted", passed: 1, total: 1 });
+
+      getOrCreateCurrentUser.mockResolvedValue({ user: { id: "user-a", displayName: "A", createdAt: "2026-01-01T00:00:00.000Z" }, setCookieHeader: null });
+      await POST(request({ problemId: "112-2", language: "csharp", source: "..." }));
+      expect(insertFinalizedRecord).toHaveBeenLastCalledWith(expect.anything(), expect.objectContaining({ userId: "user-a" }));
+
+      getOrCreateCurrentUser.mockResolvedValue({ user: { id: "user-b", displayName: "B", createdAt: "2026-01-01T00:00:00.000Z" }, setCookieHeader: null });
+      await POST(request({ problemId: "112-2", language: "csharp", source: "..." }));
+      expect(insertFinalizedRecord).toHaveBeenLastCalledWith(expect.anything(), expect.objectContaining({ userId: "user-b" }));
+    });
+
+    it("首次造訪（新使用者）時，回應會帶上 Set-Cookie 讓身份持續到下一次請求", async () => {
+      getOrCreateCurrentUser.mockResolvedValue({ user: CURRENT_USER, setCookieHeader: "skilltrack_uid=user-1; Path=/; HttpOnly" });
+      runJudge.mockResolvedValue({ id: "remote-id", verdict: "judge_not_configured", passed: 0, total: 0 });
+      const response = await POST(request({ problemId: "112-1", language: "csharp", source: "..." }));
+      expect(response.headers.get("Set-Cookie")).toContain("skilltrack_uid=user-1");
+    });
+
+    it("既有使用者（cookie 已存在）時，回應不會帶 Set-Cookie（不需要重新設定）", async () => {
+      runJudge.mockResolvedValue({ id: "remote-id", verdict: "accepted", passed: 1, total: 1 });
+      const response = await POST(request({ problemId: "112-2", language: "csharp", source: "..." }));
+      expect(response.headers.get("Set-Cookie")).toBeNull();
     });
   });
 });

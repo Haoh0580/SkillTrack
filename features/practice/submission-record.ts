@@ -6,11 +6,15 @@ export type SubmissionRecord = SubmissionResult & {
   source: string;
   createdAt: string;
   updatedAt: string;
+  /** The student who owns this submission — resolved server-side from the session
+   * cookie (see lib/auth/current-user.ts), never from client-supplied input. */
+  userId: string;
 };
 
 type PendingSubmissionInput = SubmissionRequest & {
   id: string;
   now: string;
+  userId: string;
 };
 
 export function createPendingSubmission(input: PendingSubmissionInput): SubmissionRecord {
@@ -24,6 +28,7 @@ export function createPendingSubmission(input: PendingSubmissionInput): Submissi
     total: 0,
     createdAt: input.now,
     updatedAt: input.now,
+    userId: input.userId,
   };
 }
 

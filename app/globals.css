@@ -38,8 +38,10 @@ span{background:#fff0d7;color:#8e5900}
 .appnav .brand{display:inline-flex;align-items:center;gap:9px;color:var(--n);font-weight:900;text-decoration:none;letter-spacing:.06em;font-size:.95rem}
 .appnav .brand>span:first-child{display:grid;place-items:center;width:25px;height:25px;border-radius:8px;background:var(--n);color:var(--lime);font-size:1.1rem;padding:0}
 .appnav .tagline{background:none;padding:0;border-radius:0;font-weight:700;color:var(--m);font-size:.78rem;margin-left:10px;padding-left:10px;border-left:1px solid var(--l)}
-.header-actions{display:flex;gap:10px;flex-wrap:wrap}
+.header-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 .ghost-dark{background:#fff;color:var(--n);border:1px solid var(--l)}
+.user-badge{display:inline-flex;align-items:center;gap:8px;font-size:.85rem;color:var(--n);font-weight:700;padding:6px 10px;background:#fff;border:1px solid var(--l);border-radius:999px}
+.user-badge .ghost-line{padding:4px 9px;font-size:.75rem}
 
 /* Hero: this week's status */
 .hero{background:linear-gradient(135deg,var(--n),#16306b);border-radius:24px;padding:32px 34px;color:#fff;margin-bottom:22px}
