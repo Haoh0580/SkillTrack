@@ -21,10 +21,12 @@ export async function POST(request: Request) {
   });
   await savePendingSubmission(database, pending);
 
+  const staticTests = getJudgeTestCases(body.problemId);
+  const tests = staticTests.length ? staticTests : await import("@/lib/problem-generation/problem-store").then((m) => m.getPublishedTests(body.problemId!));
   const result: SubmissionResult = await getCSharpJudge().run({
     problemId: body.problemId,
     source: body.source,
-    tests: getJudgeTestCases(body.problemId),
+    tests,
     timeLimitMs: 2000,
     memoryLimitMb: 256,
   });

@@ -1,8 +1,13 @@
 import { env } from "cloudflare:workers";
 import { isGenerationDifficulty, type ProblemDraftRequest } from "@/features/problem-generation/domain";
 import { generateProblemDraft } from "@/lib/problem-generation/openai-problem-generator";
+import { listPendingDrafts, saveDraft } from "@/lib/problem-generation/problem-store";
 
 type AiEnvironment = { AI_MODEL?: string };
+
+export async function GET() {
+  return Response.json({ drafts: await listPendingDrafts() });
+}
 
 export async function POST(request: Request) {
   let body: Partial<ProblemDraftRequest>;
@@ -14,7 +19,9 @@ export async function POST(request: Request) {
   const model = body.model?.trim() || ai.AI_MODEL || "gpt-4o-mini";
   try {
     const draft = await generateProblemDraft({ apiKey, model, difficulty: body.difficulty });
-    return Response.json({ draft });
+    const id = crypto.randomUUID();
+    await saveDraft(id, body.difficulty, draft, new Date().toISOString());
+    return Response.json({ id, draft });
   } catch (error) {
     const message = error instanceof Error ? error.message : "AI 出題服務暫時無法使用";
     return Response.json({ error: message }, { status: 502 });
