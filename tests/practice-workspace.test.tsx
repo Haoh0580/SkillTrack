@@ -30,4 +30,16 @@ describe("C# 作答工作區", () => {
     expect(JSON.parse(options.body as string)).toMatchObject({ problemId: "112-2", language: "csharp" });
     expect(await screen.findByText("判題服務尚未接入，已驗證送出 API 契約")).toBeTruthy();
   });
+
+  it("取得判題結果後顯示通過數、耗時與輸出", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ json: async () => ({ verdict: "accepted", passed: 5, total: 5, elapsedMs: 84, stdout: "2" }) }));
+    renderWorkspace();
+
+    await user.click(screen.getByRole("button", { name: "送出評測" }));
+
+    expect(await screen.findByText("已通過 5 / 5 測資")).toBeTruthy();
+    expect(screen.getByText("耗時 84 ms")).toBeTruthy();
+    expect(screen.getByText("程式輸出：2")).toBeTruthy();
+  });
 });
