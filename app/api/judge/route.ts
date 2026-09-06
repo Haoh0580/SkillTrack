@@ -7,6 +7,9 @@
 const JUDGE0_RUN_ENDPOINT = "https://ce.judge0.com/submissions?wait=true";
 const DEFAULT_LANGUAGE_ID = 51; // C# (Mono 6.6.0.161)
 const REQUEST_TIMEOUT_MS = 20000;
+const MAX_PAYLOAD_BYTES = 100 * 1024; // 100 KB, applied separately to source_code and stdin
+
+const byteLength = (value: string) => new TextEncoder().encode(value).length;
 
 type JudgeRunRequestBody = {
   source_code?: unknown;
@@ -39,15 +42,28 @@ export async function POST(request: Request) {
   }
 
   const sourceCode = body.source_code;
-  if (typeof sourceCode !== "string" || sourceCode.trim() === "") {
+  // Emptiness is judged on the raw string, not a trimmed copy — trimming here would
+  // be the first step toward silently mangling whitespace-sensitive source/stdin.
+  if (typeof sourceCode !== "string" || sourceCode === "") {
     return Response.json({ error: "source_code is required and must be a non-empty string." }, { status: 400 });
+  }
+  if (byteLength(sourceCode) > MAX_PAYLOAD_BYTES) {
+    return Response.json({ error: `source_code exceeds the ${MAX_PAYLOAD_BYTES} byte limit.` }, { status: 413 });
   }
 
   const languageId =
     typeof body.language_id === "number" && Number.isInteger(body.language_id) && body.language_id > 0
       ? body.language_id
       : DEFAULT_LANGUAGE_ID;
+
+  // stdin is forwarded byte-for-byte, exactly as received — never trimmed. "abc",
+  // "abc\n", and "abc\n\n" are meaningfully different inputs to Console.ReadLine()
+  // (a real EOF vs. a genuinely empty line), and mangling that here would silently
+  // change what the student's program actually receives.
   const stdin = typeof body.stdin === "string" ? body.stdin : "";
+  if (byteLength(stdin) > MAX_PAYLOAD_BYTES) {
+    return Response.json({ error: `stdin exceeds the ${MAX_PAYLOAD_BYTES} byte limit.` }, { status: 413 });
+  }
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);

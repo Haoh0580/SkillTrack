@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { SubmissionResult, SupportedLanguage } from "@/features/practice/domain";
 import type { ProblemDefinition } from "@/features/practice/problem-definitions";
@@ -37,6 +37,10 @@ export function PracticeWorkspace({ id, title, category, note, definition }: Pro
   const [isRunningCode, setIsRunningCode] = useState(false);
   const [runResult, setRunResult] = useState<RunResult | null>(null);
   const [runError, setRunError] = useState<string | null>(null);
+  const [runStdin, setRunStdin] = useState("");
+  // A ref (not state) so a second click is rejected synchronously even if it lands
+  // before React has re-rendered the disabled button — state alone can't close that race.
+  const runInFlightRef = useRef(false);
   useEffect(() => { if (!running) return; const timer = window.setInterval(() => setSeconds((value) => value + 1), 1000); return () => window.clearInterval(timer); }, [running]);
   const time = `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
   const elapsedMinutes = () => Math.max(1, Math.round(seconds / 60));
@@ -50,7 +54,8 @@ export function PracticeWorkspace({ id, title, category, note, definition }: Pro
   };
 
   const runCode = async () => {
-    if (isRunningCode) return;
+    if (runInFlightRef.current) return;
+    runInFlightRef.current = true;
     setIsRunningCode(true);
     setRunError(null);
     setRunResult(null);
@@ -58,7 +63,9 @@ export function PracticeWorkspace({ id, title, category, note, definition }: Pro
       const response = await fetch("/api/judge", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ source_code: source, language_id: 51, stdin: "" }),
+        // runStdin is forwarded exactly as typed — no trim() — so an intentional
+        // trailing blank line (e.g. "abc\n\n") reaches Judge0 unchanged.
+        body: JSON.stringify({ source_code: source, language_id: 51, stdin: runStdin }),
       });
       const data = await response.json() as (RunResult & { error?: string });
       if (!response.ok) {
@@ -69,6 +76,7 @@ export function PracticeWorkspace({ id, title, category, note, definition }: Pro
     } catch {
       setRunError("Execution service temporarily unavailable.");
     } finally {
+      runInFlightRef.current = false;
       setIsRunningCode(false);
     }
   };
@@ -118,8 +126,13 @@ export function PracticeWorkspace({ id, title, category, note, definition }: Pro
     <section className="practice-layout">
       <article className="problem-panel"><p className="kicker">作答工作區 · 第 2 層</p><h1>{title}</h1><p>{definition?.statement ?? note}</p><hr/>{definition ? <><h2>輸入說明</h2><p>{definition.inputSpec}</p><h2>輸出說明</h2><p>{definition.outputSpec}</p><h2>限制與提示</h2><ul>{definition.constraints.map((item) => <li key={item}>{item}</li>)}</ul><h2>範例測資</h2>{definition.examples.map((example, index) => <div className="example" key={example.input}><b>範例 {index + 1}</b><pre>{`輸入\n${example.input}\n\n輸出\n${example.output}`}</pre>{example.explanation && <small>{example.explanation}</small>}</div>)}</> : <><h2>題目內容</h2><p>此題尚待轉為結構化資料。目前可先閱讀原始題目，下一批會依相同欄位補齊輸入、輸出、限制與測資。</p><a href={`/question/${id}`}>閱讀官方題目</a></>}<small>題目代號：{id}</small></article>
       <section className="editor-panel">
-        <div className="editor-toolbar"><label>語言 <b>C#</b></label><span>草稿模式</span><button type="button" onClick={runCode} disabled={isRunningCode}>{isRunningCode ? "執行中…" : "執行程式"}</button></div>
+        <div className="editor-toolbar"><label>語言 <b>C#</b></label><span>草稿模式</span></div>
         <textarea aria-label="C# 程式碼編輯器" value={source} onFocus={() => setRunning(true)} onChange={(event) => setSource(event.target.value)} spellCheck={false}/>
+        <div className="stdin-panel">
+          <label htmlFor="run-stdin">測試輸入 / Standard Input</label>
+          <textarea id="run-stdin" aria-label="測試輸入" value={runStdin} onChange={(event) => setRunStdin(event.target.value)} spellCheck={false} rows={3}/>
+          <button type="button" onClick={runCode} disabled={isRunningCode}>{isRunningCode ? "執行中…" : "執行程式"}</button>
+        </div>
         {(isRunningCode || runResult || runError) && <div className="run-panel">
           <div><b>執行結果</b><span>{isRunningCode ? "執行中…" : runResult?.status?.description ?? (runError ? "執行失敗" : "")}</span></div>
           {runError && <p className="run-error">{runError}</p>}
@@ -127,7 +140,7 @@ export function PracticeWorkspace({ id, title, category, note, definition }: Pro
             {runResult.compile_output && <p><b>Compile Error</b><br/>{runResult.compile_output}</p>}
             {!runResult.compile_output && runResult.stderr && <p><b>Runtime Error</b><br/>{runResult.stderr}</p>}
             {!runResult.compile_output && !runResult.stderr && runResult.stdout && <p><b>Output</b><br/>{runResult.stdout}</p>}
-            {!runResult.compile_output && !runResult.stderr && !runResult.stdout && <p>（無輸出）</p>}
+            {!runResult.compile_output && !runResult.stderr && !runResult.stdout && <p>程式沒有輸出內容</p>}
             <small>{runResult.time !== null && `耗時 ${runResult.time}s`}{runResult.memory !== null && ` · 記憶體 ${runResult.memory} KB`}</small>
           </>}
         </div>}
