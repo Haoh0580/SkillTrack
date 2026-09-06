@@ -14,6 +14,11 @@
   "cache": {
     "enabled": true
   },
+  "vars": {
+    "JUDGE_PROVIDER": "judge0",
+    "JUDGE_ENDPOINT": "https://ce.judge0.com",
+    "JUDGE0_CSHARP_LANGUAGE_ID": "51"
+  },
   "d1_databases": [
     {
       "binding": "DB",
