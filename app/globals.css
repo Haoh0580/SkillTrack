@@ -107,6 +107,13 @@ span{background:#fff0d7;color:#8e5900}
 .editor-panel{display:flex;flex-direction:column;min-height:680px;padding:0;overflow:hidden}
 .editor-toolbar{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;background:#102b45;color:#fff}
 .editor-toolbar select{margin-left:8px;padding:6px;border-radius:6px}
+.editor-toolbar button{background:#0a6256}
+.run-panel{padding:18px;border-top:1px solid #d9e4ef;background:#f4f8fc}
+.run-panel div{display:flex;justify-content:space-between}
+.run-panel span{background:#eaf1ff;color:#173c66}
+.run-panel p{white-space:pre-wrap;word-break:break-word;margin:10px 0}
+.run-panel small{color:#52667e}
+.run-error{color:#b3261e}
 .editor-panel textarea{flex:1;min-height:360px;resize:none;border:0;padding:20px;background:#0d1725;color:#e5eefb;font:1rem/1.6 Consolas,monospace;outline:0}
 .result-panel{padding:18px;border-top:1px solid #d9e4ef}
 .result-panel div{display:flex;justify-content:space-between}
