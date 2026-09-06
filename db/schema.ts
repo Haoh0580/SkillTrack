@@ -1,4 +1,4 @@
-import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 export const resources = sqliteTable("resources", {
   id: text("id").primaryKey(),
@@ -20,3 +20,25 @@ export const records = sqliteTable("records", {
   notes: text("notes").notNull(),
   createdAt: text("created_at").notNull(),
 });
+
+export const submissions = sqliteTable(
+  "submissions",
+  {
+    id: text("id").primaryKey(),
+    problemId: text("problem_id").notNull(),
+    language: text("language").notNull(),
+    source: text("source").notNull(),
+    verdict: text("verdict").notNull(),
+    passed: integer("passed").notNull(),
+    total: integer("total").notNull(),
+    elapsedMs: integer("elapsed_ms"),
+    stdout: text("stdout"),
+    stderr: text("stderr"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    index("idx_submissions_problem_created").on(table.problemId, table.createdAt),
+    index("idx_submissions_created").on(table.createdAt),
+  ],
+);

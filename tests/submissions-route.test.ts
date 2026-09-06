@@ -1,9 +1,22 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const { savePendingSubmission, saveJudgeResult } = vi.hoisted(() => ({
+  savePendingSubmission: vi.fn(),
+  saveJudgeResult: vi.fn(),
+}));
+
+vi.mock("@/lib/runtime/database", () => ({ getSubmissionDatabase: vi.fn(() => ({})) }));
+vi.mock("@/lib/submissions/store", () => ({ savePendingSubmission, saveJudgeResult }));
+
 import { POST } from "@/app/api/submissions/route";
 
 const request = (body: unknown) => new Request("http://test/api/submissions", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
 
 describe("送出評測 API", () => {
+  beforeEach(() => {
+    savePendingSubmission.mockReset().mockResolvedValue(undefined);
+    saveJudgeResult.mockReset().mockResolvedValue(undefined);
+  });
   it("拒絕缺少題目、程式碼或 C# 語言的送出", async () => {
     const missingSource = await POST(request({ problemId: "112-2", language: "csharp" }));
     const wrongLanguage = await POST(request({ problemId: "112-2", language: "python", source: "print(1)" }));
@@ -15,5 +28,7 @@ describe("送出評測 API", () => {
     const response = await POST(request({ problemId: "112-2", language: "csharp", source: "public class Program {}" }));
     expect(response.status).toBe(503);
     await expect(response.json()).resolves.toMatchObject({ verdict: "judge_not_configured", passed: 0, total: 0 });
+    expect(savePendingSubmission).toHaveBeenCalledOnce();
+    expect(saveJudgeResult).toHaveBeenCalledOnce();
   });
 });
