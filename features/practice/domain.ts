@@ -1,4 +1,4 @@
-export type SupportedLanguage = "cpp" | "python";
+export type SupportedLanguage = "csharp";
 
 export type SubmissionRequest = {
   problemId: string;

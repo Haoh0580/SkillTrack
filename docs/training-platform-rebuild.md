@@ -29,7 +29,7 @@
 ```ts
 type SubmissionRequest = {
   problemId: string;
-  language: "cpp" | "python";
+  language: "csharp"; // 第一階段僅支援 C#
   source: string;
 };
 
